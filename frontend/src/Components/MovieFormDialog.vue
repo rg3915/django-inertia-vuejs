@@ -1,20 +1,33 @@
 <script setup>
+import { ref, watch } from "vue"
+import { useModal } from "../composables/useModal"
+
 // Dialog reutilizável para criar e editar filmes.
 // Recebe o form (useForm do Inertia), os errors do Django,
 // o título do dialog e controla visibilidade via v-model (open).
 const props = defineProps(["form", "errors", "title", "open"])
 const emit = defineEmits(["update:open", "submit"])
 
-function close() {
+const dialogRef = ref(null)
+const { isOpen, open, close } = useModal(dialogRef)
+
+// Sincroniza v-model:open do pai com o estado interno do modal
+watch(() => props.open, (val) => {
+    if (val && !isOpen.value) open()
+    if (!val && isOpen.value) close()
+})
+
+function handleClose() {
+    close()
     emit("update:open", false)
 }
 </script>
 
 <template>
-    <dialog :open="open">
+    <dialog ref="dialogRef" @close="handleClose">
         <article>
             <header>
-                <button aria-label="Close" rel="prev" @click="close"></button>
+                <button aria-label="Close" rel="prev" @click="handleClose"></button>
                 <h3>{{ title }}</h3>
             </header>
             <form @submit.prevent="$emit('submit')">
@@ -68,7 +81,7 @@ function close() {
 
                 <footer>
                     <div class="grid">
-                        <button type="button" class="outline secondary" @click="close">Cancelar</button>
+                        <button type="button" class="outline secondary" @click="handleClose">Cancelar</button>
                         <button type="submit" :disabled="form.processing" :aria-busy="form.processing">Salvar</button>
                     </div>
                 </footer>

@@ -54,7 +54,10 @@ function openCreate() {
 // e o dialog reabre com os erros exibidos.
 function submitCreate() {
     createForm.post("/create/", {
-        onSuccess: () => { showCreateDialog.value = false },
+        onSuccess: () => {
+            createForm.reset()
+            showCreateDialog.value = false
+        },
     })
 }
 
