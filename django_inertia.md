@@ -233,13 +233,15 @@ graph TB
 ```yaml
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:18.3-alpine
     restart: unless-stopped
     env_file: .env
     ports:
       - "5431:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - movies-network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -249,22 +251,14 @@ services:
       - "5050:80"
     depends_on:
       - db
+    networks:
+      - movies-network
 
 volumes:
   pgdata:
-```
 
-### .env (exemplo)
-
-```env
-POSTGRES_DB=movies_db
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-
-PGADMIN_DEFAULT_EMAIL=admin@admin.com
-PGADMIN_DEFAULT_PASSWORD=admin
-
-DATABASE_URL=postgres://postgres:postgres@localhost:5431/movies_db
+networks:
+  movies-network:
 ```
 
 ### Como rodar em desenvolvimento
@@ -297,20 +291,24 @@ O Vite roda localmente porque o Django precisa ler os assets dele em tempo real 
 Crie a pasta do projeto e os arquivos de infraestrutura:
 
 ```bash
-mkdir movies && cd movies
+mkdir django-inertia-vuejs  # caso a pasta ainda não exista
+cd django-inertia-vuejs  # caso já não esteja dentro da pasta
 ```
 
 Crie o `.env`:
 
-```env
+```bash
+cat <<'EOF' > .env
 POSTGRES_DB=movies_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
+POSTGRES_PORT=5431
 
 PGADMIN_DEFAULT_EMAIL=admin@admin.com
 PGADMIN_DEFAULT_PASSWORD=admin
 
 DATABASE_URL=postgres://postgres:postgres@localhost:5431/movies_db
+EOF
 ```
 
 Crie o `docker-compose.yml`:
@@ -318,13 +316,15 @@ Crie o `docker-compose.yml`:
 ```yaml
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:18.3-alpine
     restart: unless-stopped
     env_file: .env
     ports:
       - "5431:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - movies-network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -334,9 +334,14 @@ services:
       - "5050:80"
     depends_on:
       - db
+    networks:
+      - movies-network
 
 volumes:
   pgdata:
+
+networks:
+  movies-network:
 ```
 
 ```bash
@@ -360,7 +365,6 @@ Edite `apps/core/apps.py` para que o Django reconheça a app como subpasta:
 from django.apps import AppConfig
 
 class CoreConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
     name = "apps.core"
 ```
 
@@ -368,7 +372,8 @@ Edite `apps/settings.py`:
 
 ```python
 from decouple import config
-import os
+
+SECRET_KEY = config("SECRET_KEY")
 
 INSTALLED_APPS = [
     # ... apps padrão ...
@@ -390,17 +395,21 @@ DATABASES = {
         "USER": config("POSTGRES_USER"),
         "PASSWORD": config("POSTGRES_PASSWORD"),
         "HOST": "localhost",
-        "PORT": "5431",
+        "PORT": config("POSTGRES_PORT", default="5431"),
     }
 }
 
 TEMPLATES = [
     {
         # ...
-        "DIRS": [os.path.join(BASE_DIR, "templates")],
+        "DIRS": [BASE_DIR.joinpath("templates")],
         # ...
     },
 ]
+
+LANGUAGE_CODE = "pt-br"
+
+TIME_ZONE = "America/Sao_Paulo"
 
 # Inertia
 INERTIA_LAYOUT = "base.html"
@@ -411,12 +420,14 @@ DJANGO_VITE = {
         "dev_mode": True,
         "dev_server_host": "localhost",
         "dev_server_port": 5173,
-        "manifest_path": os.path.join(BASE_DIR, "frontend", "dist", ".vite", "manifest.json"),
+        "manifest_path": BASE_DIR.joinpath("frontend", "dist", ".vite", "manifest.json"),
     }
 }
 
+STATIC_URL = 'static/'
+
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "frontend", "dist"),
+    BASE_DIR.joinpath("frontend", "dist"),
 ]
 ```
 
@@ -1172,7 +1183,7 @@ services:
       - web
 
   db:
-    image: postgres:17-alpine
+    image: postgres:18.3-alpine
     env_file: .env
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
