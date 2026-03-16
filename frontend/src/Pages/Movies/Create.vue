@@ -12,6 +12,7 @@ const form = useForm({
     director: "",
     year: "",
     genre: "",
+    rating: "",
     status: "want",
     notes: "",
 })
@@ -33,14 +34,22 @@ function submit() {
             <div>
                 <label>Diretor</label>
                 <input v-model="form.director" />
+                <span v-if="errors.director" style="color: red">{{ errors.director[0] }}</span>
             </div>
             <div>
                 <label>Ano</label>
-                <input v-model="form.year" type="number" />
+                <input v-model="form.year" type="number" min="0" />
+                <span v-if="errors.year" style="color: red">{{ errors.year[0] }}</span>
             </div>
             <div>
                 <label>Genero</label>
                 <input v-model="form.genre" />
+                <span v-if="errors.genre" style="color: red">{{ errors.genre[0] }}</span>
+            </div>
+            <div>
+                <label>Nota (0-10)</label>
+                <input v-model="form.rating" type="number" min="0" max="10" />
+                <span v-if="errors.rating" style="color: red">{{ errors.rating[0] }}</span>
             </div>
             <div>
                 <label>Status</label>
@@ -49,10 +58,12 @@ function submit() {
                     <option value="watching">Assistindo</option>
                     <option value="watched">Assistido</option>
                 </select>
+                <span v-if="errors.status" style="color: red">{{ errors.status[0] }}</span>
             </div>
             <div>
                 <label>Notas</label>
                 <textarea v-model="form.notes"></textarea>
+                <span v-if="errors.notes" style="color: red">{{ errors.notes[0] }}</span>
             </div>
             <button type="submit" :disabled="form.processing">Salvar</button>
         </form>

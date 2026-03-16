@@ -3,13 +3,14 @@ import { useForm } from "@inertiajs/vue3"
 
 // 'movie' vem do Django: movie.serializable_values() passado como prop pelo Inertia.
 // O useForm inicializa os campos do formulário com os valores atuais do filme.
-const props = defineProps(["movie"])
+const props = defineProps(["movie", "errors"])
 
 const form = useForm({
     title: props.movie.title,
     director: props.movie.director,
     year: props.movie.year || "",
     genre: props.movie.genre,
+    rating: props.movie.rating || "",
     status: props.movie.status,
     notes: props.movie.notes,
 })
@@ -25,19 +26,28 @@ function submit() {
         <form @submit.prevent="submit">
             <div>
                 <label>Titulo</label>
-                <input v-model="form.title" required />
+                <input v-model="form.title" />
+                <span v-if="errors.title" style="color: red">{{ errors.title[0] }}</span>
             </div>
             <div>
                 <label>Diretor</label>
                 <input v-model="form.director" />
+                <span v-if="errors.director" style="color: red">{{ errors.director[0] }}</span>
             </div>
             <div>
                 <label>Ano</label>
-                <input v-model="form.year" type="number" />
+                <input v-model="form.year" type="number" min="0" />
+                <span v-if="errors.year" style="color: red">{{ errors.year[0] }}</span>
             </div>
             <div>
                 <label>Genero</label>
                 <input v-model="form.genre" />
+                <span v-if="errors.genre" style="color: red">{{ errors.genre[0] }}</span>
+            </div>
+            <div>
+                <label>Nota (0-10)</label>
+                <input v-model="form.rating" type="number" min="0" max="10" />
+                <span v-if="errors.rating" style="color: red">{{ errors.rating[0] }}</span>
             </div>
             <div>
                 <label>Status</label>
@@ -46,10 +56,12 @@ function submit() {
                     <option value="watching">Assistindo</option>
                     <option value="watched">Assistido</option>
                 </select>
+                <span v-if="errors.status" style="color: red">{{ errors.status[0] }}</span>
             </div>
             <div>
                 <label>Notas</label>
                 <textarea v-model="form.notes"></textarea>
+                <span v-if="errors.notes" style="color: red">{{ errors.notes[0] }}</span>
             </div>
             <button type="submit" :disabled="form.processing">Salvar</button>
         </form>
