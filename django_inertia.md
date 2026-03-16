@@ -204,9 +204,7 @@ movies/
         ├── main.js
         └── Pages/
             └── Movies/
-                ├── Index.vue
-                ├── Create.vue
-                └── Edit.vue
+                └── Index.vue
 ```
 
 ---
@@ -564,6 +562,8 @@ Neste tutorial usamos a **função `render()`** por ser a mais familiar para que
 >
 > Por isso criamos o helper `_get_post_data()` que detecta o content type e faz o parse do `request.body` quando necessário.
 
+Todo o CRUD acontece em uma única página (`Movies/Index`). As views de criação e edição, em caso de erro de validação, re-renderizam `Movies/Index` com props extras (`errors`, `showDialog`, `formData`) para que o dialog reabra com os erros exibidos.
+
 ```python
 # apps/core/views.py
 import json
@@ -583,53 +583,55 @@ def _get_post_data(request):
     return request.POST
 
 
-def movie_list(request):
+def _index_props():
+    """Props comuns para a página Index."""
     movies = Movie.objects.all()
     data = [movie.serializable_values(exclude=["added_at"]) for movie in movies]
-    return render(
-        request,
-        "Movies/Index",
-        props={
-            "movies": data,
-            "stats": {
-                "total": movies.count(),
-                "want": movies.filter(status="want").count(),
-                "watching": movies.filter(status="watching").count(),
-                "watched": movies.filter(status="watched").count(),
-            },
+    return {
+        "movies": data,
+        "stats": {
+            "total": movies.count(),
+            "want": movies.filter(status="want").count(),
+            "watching": movies.filter(status="watching").count(),
+            "watched": movies.filter(status="watched").count(),
         },
-    )
+    }
+
+
+def movie_list(request):
+    return render(request, "Movies/Index", props=_index_props())
 
 
 def movie_create(request):
-    data = _get_post_data(request) if request.method == "POST" else None
+    data = _get_post_data(request)
     form = MovieForm(data)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         form.save()
         return redirect("movie_list")
 
-    return render(request, "Movies/Create", props={"errors": form.errors})
+    props = _index_props()
+    props["errors"] = form.errors
+    props["showDialog"] = "create"
+    props["formData"] = dict(data)
+    return render(request, "Movies/Index", props=props)
 
 
 def movie_update(request, pk):
     movie = get_object_or_404(Movie, pk=pk)
-    data = _get_post_data(request) if request.method == "POST" else None
+    data = _get_post_data(request)
     form = MovieForm(data, instance=movie)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         form.save()
         return redirect("movie_list")
 
-    data = movie.serializable_values(exclude=["added_at"])
-    return render(
-        request,
-        "Movies/Edit",
-        props={
-            "movie": data,
-            "errors": form.errors,
-        },
-    )
+    props = _index_props()
+    props["errors"] = form.errors
+    props["showDialog"] = "edit"
+    props["editMovie"] = movie.serializable_values(exclude=["added_at"])
+    props["formData"] = dict(data)
+    return render(request, "Movies/Index", props=props)
 
 
 def movie_delete(request, pk):
@@ -669,7 +671,7 @@ urlpatterns = [
 ```bash
 mkdir frontend && cd frontend
 npm init -y
-npm install vue @inertiajs/vue3 @vitejs/plugin-vue
+npm install vue @inertiajs/vue3 @vitejs/plugin-vue @picocss/pico
 npm install -D vite
 ```
 
@@ -699,6 +701,7 @@ export default defineConfig({
 Crie `frontend/src/main.js`:
 
 ```js
+import "@picocss/pico"
 import { createApp, h } from "vue"
 import { createInertiaApp } from "@inertiajs/vue3"
 
@@ -715,11 +718,12 @@ createInertiaApp({
 })
 ```
 
-Crie `frontend/src/Pages/Movies/Index.vue`.
+Crie `frontend/src/Pages/Movies/Index.vue`. Todo o CRUD acontece nesta única página, usando dialogs do PicoCSS para criar, editar e confirmar exclusão.
 
 ```vue
 <script setup>
-import { router } from "@inertiajs/vue3"
+import { ref, onMounted } from "vue"
+import { router, useForm } from "@inertiajs/vue3"
 
 // defineProps é uma macro do Vue 3 que declara quais dados o componente espera receber.
 // Quem passa esses dados é o Django — quando a view faz:
@@ -728,8 +732,84 @@ import { router } from "@inertiajs/vue3"
 // É como se o Django fizesse <Index :movies="data" :stats="stats" />,
 // mas quem faz essa passagem é o protocolo Inertia, não um componente pai Vue.
 // Sem o defineProps, o componente não teria acesso aos dados.
-const props = defineProps(["movies", "stats"])
+//
+// Quando uma validação falha no backend, o Django re-renderiza Movies/Index
+// com props extras: errors, showDialog, editMovie e formData.
+// Isso permite reabrir o dialog com os dados preenchidos e os erros exibidos.
+const props = defineProps([
+    "movies", "stats",
+    "errors", "showDialog", "editMovie", "formData",
+])
 
+// --- Estado dos dialogs ---
+// Controlados por refs locais (reativo). O Vue atualiza o DOM automaticamente
+// quando qualquer ref muda — sem manipulação manual de DOM.
+const showCreateDialog = ref(false)
+const showEditDialog = ref(false)
+const showDeleteDialog = ref(false)
+const movieToDelete = ref(null)
+const editingMovieId = ref(null)
+
+// --- Form de criação ---
+// useForm é um helper do Inertia que cria um objeto reativo com os campos
+// do formulário, estado de processamento e métodos para enviar (post, put, etc).
+const createForm = useForm({
+    title: "",
+    director: "",
+    year: "",
+    genre: "",
+    rating: "",
+    status: "want",
+    notes: "",
+})
+
+function openCreate() {
+    createForm.reset()
+    showCreateDialog.value = true
+}
+
+// createForm.post() faz um POST diretamente para uma rota do Django.
+// A URL `/create/` é uma rota definida no urls.py — não existe Vue Router.
+// O Inertia intercepta a resposta: se for um redirect 302 (sucesso),
+// busca os novos dados via JSON e atualiza a página sem recarregar.
+// Se for uma re-renderização (erro de validação), atualiza os props
+// e o dialog reabre com os erros exibidos.
+function submitCreate() {
+    createForm.post("/create/", {
+        onSuccess: () => { showCreateDialog.value = false },
+    })
+}
+
+// --- Form de edição ---
+const editForm = useForm({
+    title: "",
+    director: "",
+    year: "",
+    genre: "",
+    rating: "",
+    status: "want",
+    notes: "",
+})
+
+function openEdit(movie) {
+    editingMovieId.value = movie.id
+    editForm.title = movie.title
+    editForm.director = movie.director
+    editForm.year = movie.year || ""
+    editForm.genre = movie.genre
+    editForm.rating = movie.rating || ""
+    editForm.status = movie.status
+    editForm.notes = movie.notes
+    showEditDialog.value = true
+}
+
+function submitEdit() {
+    editForm.post(`/${editingMovieId.value}/update/`, {
+        onSuccess: () => { showEditDialog.value = false },
+    })
+}
+
+// --- Delete ---
 // router.post() faz um POST diretamente para uma rota do Django.
 // A URL `/${id}/delete/` é uma rota definida no urls.py — não existe Vue Router.
 // O Inertia intercepta a resposta (um redirect 302), busca os novos dados
@@ -744,203 +824,141 @@ const props = defineProps(["movies", "stats"])
 // Com o Inertia, nada disso existe. O router.post() substitui o axios/fetch,
 // a rota é uma só (do Django), e não há API — o Django responde direto
 // para o componente Vue via protocolo Inertia.
-function deleteMovie(id) {
-    if (confirm("Tem certeza?")) {
-        router.post(`/${id}/delete/`)
+function confirmDelete(movie) {
+    movieToDelete.value = movie
+    showDeleteDialog.value = true
+}
+
+function executeDelete() {
+    router.post(`/${movieToDelete.value.id}/delete/`, {}, {
+        onSuccess: () => {
+            showDeleteDialog.value = false
+            movieToDelete.value = null
+        },
+    })
+}
+
+// --- Reabrir dialog se o servidor retornou com erros de validação ---
+// Quando o Django detecta erro de validação, ele re-renderiza Movies/Index
+// com showDialog='create' ou 'edit', junto com formData (dados submetidos)
+// e errors. O onMounted lê esses props e reabre o dialog automaticamente,
+// mantendo os dados que o usuário digitou e exibindo os erros.
+onMounted(() => {
+    if (props.showDialog === "create" && props.formData) {
+        createForm.title = props.formData.title || ""
+        createForm.director = props.formData.director || ""
+        createForm.year = props.formData.year || ""
+        createForm.genre = props.formData.genre || ""
+        createForm.rating = props.formData.rating || ""
+        createForm.status = props.formData.status || "want"
+        createForm.notes = props.formData.notes || ""
+        showCreateDialog.value = true
     }
-}
-</script>
 
-<template>
-    <div>
-        <h1>Filmes ({{ stats.total }})</h1>
-
-        <p>
-            Quero ver: {{ stats.want }} |
-            Assistindo: {{ stats.watching }} |
-            Assistidos: {{ stats.watched }}
-        </p>
-
-        <a href="/create/">Novo filme</a>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Titulo</th>
-                    <th>Diretor</th>
-                    <th>Ano</th>
-                    <th>Status</th>
-                    <th>Acoes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="movie in movies" :key="movie.id">
-                    <td>{{ movie.title }}</td>
-                    <td>{{ movie.director }}</td>
-                    <td>{{ movie.year }}</td>
-                    <td>{{ movie.status }}</td>
-                    <td>
-                        <a :href="`/${movie.id}/update/`">Editar</a>
-                        <button @click="deleteMovie(movie.id)">Excluir</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</template>
-```
-
-Crie `frontend/src/Pages/Movies/Create.vue`:
-
-```vue
-<script setup>
-import { useForm } from "@inertiajs/vue3"
-
-// 'errors' vem do Django: form.errors passado como prop pelo Inertia.
-// No GET inicial, errors é um objeto vazio {}.
-// No POST com validação falha, o Django redireciona de volta
-// e o errors vem preenchido, ex: { "title": ["Este campo é obrigatório."] }
-const props = defineProps(["errors"])
-
-const form = useForm({
-    title: "",
-    director: "",
-    year: "",
-    genre: "",
-    rating: "",
-    status: "want",
-    notes: "",
+    if (props.showDialog === "edit" && props.editMovie) {
+        editingMovieId.value = props.editMovie.id
+        editForm.title = props.formData?.title || props.editMovie.title
+        editForm.director = props.formData?.director || props.editMovie.director
+        editForm.year = props.formData?.year || props.editMovie.year || ""
+        editForm.genre = props.formData?.genre || props.editMovie.genre
+        editForm.rating = props.formData?.rating || props.editMovie.rating || ""
+        editForm.status = props.formData?.status || props.editMovie.status
+        editForm.notes = props.formData?.notes || props.editMovie.notes
+        showEditDialog.value = true
+    }
 })
-
-function submit() {
-    form.post("/create/")
-}
 </script>
 
 <template>
-    <div>
-        <h1>Novo Filme</h1>
-        <form @submit.prevent="submit">
-            <div>
-                <label>Titulo</label>
-                <input v-model="form.title" />
-                <span v-if="errors.title" style="color: red">{{ errors.title[0] }}</span>
-            </div>
-            <div>
-                <label>Diretor</label>
-                <input v-model="form.director" />
-                <span v-if="errors.director" style="color: red">{{ errors.director[0] }}</span>
-            </div>
-            <div>
-                <label>Ano</label>
-                <input v-model="form.year" type="number" min="0" />
-                <span v-if="errors.year" style="color: red">{{ errors.year[0] }}</span>
-            </div>
-            <div>
-                <label>Genero</label>
-                <input v-model="form.genre" />
-                <span v-if="errors.genre" style="color: red">{{ errors.genre[0] }}</span>
-            </div>
-            <div>
-                <label>Nota (0-10)</label>
-                <input v-model="form.rating" type="number" min="0" max="10" />
-                <span v-if="errors.rating" style="color: red">{{ errors.rating[0] }}</span>
-            </div>
-            <div>
-                <label>Status</label>
-                <select v-model="form.status">
-                    <option value="want">Quero Ver</option>
-                    <option value="watching">Assistindo</option>
-                    <option value="watched">Assistido</option>
-                </select>
-                <span v-if="errors.status" style="color: red">{{ errors.status[0] }}</span>
-            </div>
-            <div>
-                <label>Notas</label>
-                <textarea v-model="form.notes"></textarea>
-                <span v-if="errors.notes" style="color: red">{{ errors.notes[0] }}</span>
-            </div>
-            <button type="submit" :disabled="form.processing">Salvar</button>
-        </form>
-        <a href="/">Voltar</a>
-    </div>
+    <main class="container">
+        <hgroup>
+            <h1>Filmes</h1>
+            <p>
+                Total: {{ stats.total }} |
+                Quero ver: {{ stats.want }} |
+                Assistindo: {{ stats.watching }} |
+                Assistidos: {{ stats.watched }}
+            </p>
+        </hgroup>
+
+        <button @click="openCreate">Novo filme</button>
+
+        <figure>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Titulo</th>
+                        <th>Diretor</th>
+                        <th>Ano</th>
+                        <th>Nota</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="movie in movies" :key="movie.id">
+                        <td>{{ movie.title }}</td>
+                        <td>{{ movie.director }}</td>
+                        <td>{{ movie.year }}</td>
+                        <td>{{ movie.rating }}</td>
+                        <td>{{ movie.status }}</td>
+                        <td>
+                            <a href="#" role="button" class="outline" @click.prevent="openEdit(movie)">Editar</a>
+                            &nbsp;
+                            <a href="#" role="button" class="outline secondary" @click.prevent="confirmDelete(movie)">Excluir</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </figure>
+
+        <!-- Dialog: Criar filme -->
+        <dialog :open="showCreateDialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" @click="showCreateDialog = false"></button>
+                    <h3>Novo Filme</h3>
+                </header>
+                <form @submit.prevent="submitCreate">
+                    <!-- campos do formulário com validação -->
+                </form>
+            </article>
+        </dialog>
+
+        <!-- Dialog: Editar filme -->
+        <dialog :open="showEditDialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" @click="showEditDialog = false"></button>
+                    <h3>Editar Filme</h3>
+                </header>
+                <form @submit.prevent="submitEdit">
+                    <!-- campos do formulário com validação -->
+                </form>
+            </article>
+        </dialog>
+
+        <!-- Dialog: Confirmar exclusão -->
+        <dialog :open="showDeleteDialog">
+            <article>
+                <header>
+                    <button aria-label="Close" rel="prev" @click="showDeleteDialog = false"></button>
+                    <h3>Confirmar exclusão</h3>
+                </header>
+                <p>Tem certeza que deseja excluir <strong>{{ movieToDelete?.title }}</strong>?</p>
+                <footer>
+                    <div class="grid">
+                        <button class="outline secondary" @click="showDeleteDialog = false">Cancelar</button>
+                        <button class="contrast" @click="executeDelete">Excluir</button>
+                    </div>
+                </footer>
+            </article>
+        </dialog>
+    </main>
 </template>
 ```
 
-Crie `frontend/src/Pages/Movies/Edit.vue`:
-
-```vue
-<script setup>
-import { useForm } from "@inertiajs/vue3"
-
-// 'movie' vem do Django: movie.serializable_values() passado como prop pelo Inertia.
-// O useForm inicializa os campos do formulário com os valores atuais do filme.
-const props = defineProps(["movie", "errors"])
-
-const form = useForm({
-    title: props.movie.title,
-    director: props.movie.director,
-    year: props.movie.year || "",
-    genre: props.movie.genre,
-    rating: props.movie.rating || "",
-    status: props.movie.status,
-    notes: props.movie.notes,
-})
-
-function submit() {
-    form.post(`/${props.movie.id}/update/`)
-}
-</script>
-
-<template>
-    <div>
-        <h1>Editar: {{ movie.title }}</h1>
-        <form @submit.prevent="submit">
-            <div>
-                <label>Titulo</label>
-                <input v-model="form.title" />
-                <span v-if="errors.title" style="color: red">{{ errors.title[0] }}</span>
-            </div>
-            <div>
-                <label>Diretor</label>
-                <input v-model="form.director" />
-                <span v-if="errors.director" style="color: red">{{ errors.director[0] }}</span>
-            </div>
-            <div>
-                <label>Ano</label>
-                <input v-model="form.year" type="number" min="0" />
-                <span v-if="errors.year" style="color: red">{{ errors.year[0] }}</span>
-            </div>
-            <div>
-                <label>Genero</label>
-                <input v-model="form.genre" />
-                <span v-if="errors.genre" style="color: red">{{ errors.genre[0] }}</span>
-            </div>
-            <div>
-                <label>Nota (0-10)</label>
-                <input v-model="form.rating" type="number" min="0" max="10" />
-                <span v-if="errors.rating" style="color: red">{{ errors.rating[0] }}</span>
-            </div>
-            <div>
-                <label>Status</label>
-                <select v-model="form.status">
-                    <option value="want">Quero Ver</option>
-                    <option value="watching">Assistindo</option>
-                    <option value="watched">Assistido</option>
-                </select>
-                <span v-if="errors.status" style="color: red">{{ errors.status[0] }}</span>
-            </div>
-            <div>
-                <label>Notas</label>
-                <textarea v-model="form.notes"></textarea>
-                <span v-if="errors.notes" style="color: red">{{ errors.notes[0] }}</span>
-            </div>
-            <button type="submit" :disabled="form.processing">Salvar</button>
-        </form>
-        <a href="/">Voltar</a>
-    </div>
-</template>
-```
+> Os dialogs de criação e edição contêm os mesmos campos do formulário (Titulo, Diretor, Ano, Genero, Nota, Status, Notas) com validação via `aria-invalid` e mensagens de erro do Django. O template completo está no código-fonte do projeto.
 
 ### Passo 8 — Rodar
 
@@ -994,15 +1012,21 @@ Os erros do `ModelForm` são passados como prop `errors`. No GET inicial é um d
 
 ```python
 def movie_create(request):
-    data = _get_post_data(request) if request.method == "POST" else None
+    data = _get_post_data(request)
     form = MovieForm(data)
 
-    if request.method == "POST" and form.is_valid():
+    if form.is_valid():
         form.save()
         return redirect("movie_list")
 
-    # form.errors é {} no GET, ou {"title": ["Este campo é obrigatório."]} no POST inválido
-    return render(request, "Movies/Create", props={"errors": form.errors})
+    # form.errors é {"title": ["Este campo é obrigatório."]} no POST inválido
+    # Re-renderiza Movies/Index com os erros e showDialog='create'
+    # para que o dialog reabra automaticamente com os erros exibidos.
+    props = _index_props()
+    props["errors"] = form.errors
+    props["showDialog"] = "create"
+    props["formData"] = dict(data)
+    return render(request, "Movies/Index", props=props)
 ```
 
 ### No Vue (componente)

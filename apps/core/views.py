@@ -15,53 +15,55 @@ def _get_post_data(request):
     return request.POST
 
 
-def movie_list(request):
+def _index_props():
+    """Props comuns para a página Index."""
     movies = Movie.objects.all()
     data = [movie.serializable_values(exclude=['added_at']) for movie in movies]
-    return render(
-        request,
-        'Movies/Index',
-        props={
-            'movies': data,
-            'stats': {
-                'total': movies.count(),
-                'want': movies.filter(status='want').count(),
-                'watching': movies.filter(status='watching').count(),
-                'watched': movies.filter(status='watched').count(),
-            },
+    return {
+        'movies': data,
+        'stats': {
+            'total': movies.count(),
+            'want': movies.filter(status='want').count(),
+            'watching': movies.filter(status='watching').count(),
+            'watched': movies.filter(status='watched').count(),
         },
-    )
+    }
+
+
+def movie_list(request):
+    return render(request, 'Movies/Index', props=_index_props())
 
 
 def movie_create(request):
-    data = _get_post_data(request) if request.method == 'POST' else None
+    data = _get_post_data(request)
     form = MovieForm(data)
 
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         form.save()
         return redirect('movie_list')
 
-    return render(request, 'Movies/Create', props={'errors': form.errors})
+    props = _index_props()
+    props['errors'] = form.errors
+    props['showDialog'] = 'create'
+    props['formData'] = dict(data)
+    return render(request, 'Movies/Index', props=props)
 
 
 def movie_update(request, pk):
     movie = get_object_or_404(Movie, pk=pk)
-    data = _get_post_data(request) if request.method == 'POST' else None
+    data = _get_post_data(request)
     form = MovieForm(data, instance=movie)
 
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         form.save()
         return redirect('movie_list')
 
-    data = movie.serializable_values(exclude=['added_at'])
-    return render(
-        request,
-        'Movies/Edit',
-        props={
-            'movie': data,
-            'errors': form.errors,
-        },
-    )
+    props = _index_props()
+    props['errors'] = form.errors
+    props['showDialog'] = 'edit'
+    props['editMovie'] = movie.serializable_values(exclude=['added_at'])
+    props['formData'] = dict(data)
+    return render(request, 'Movies/Index', props=props)
 
 
 def movie_delete(request, pk):
