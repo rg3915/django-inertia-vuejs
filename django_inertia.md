@@ -295,10 +295,12 @@ mkdir django-inertia-vuejs  # caso a pasta ainda não exista
 cd django-inertia-vuejs  # caso já não esteja dentro da pasta
 ```
 
-Crie o `.env`:
+Crie o `.env` e gere uma `SECRET_KEY`:
 
 ```bash
 cat <<'EOF' > .env
+SECRET_KEY=mude-me
+
 POSTGRES_DB=movies_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
@@ -310,6 +312,14 @@ PGADMIN_DEFAULT_PASSWORD=admin
 DATABASE_URL=postgres://postgres:postgres@localhost:5431/movies_db
 EOF
 ```
+
+Para gerar a `SECRET_KEY`, rode:
+
+```bash
+uv run python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+Cole o valor gerado na variável `SECRET_KEY` do `.env`.
 
 Crie o `docker-compose.yml`:
 
@@ -353,6 +363,7 @@ docker compose up -d
 ```bash
 uv init --bare
 uv add django inertia-django django-vite django-extensions psycopg2-binary python-decouple
+uv add --dev ruff
 
 uv run django-admin startproject apps .
 mkdir apps/core
@@ -410,6 +421,10 @@ TEMPLATES = [
 LANGUAGE_CODE = "pt-br"
 
 TIME_ZONE = "America/Sao_Paulo"
+
+# CSRF — o Inertia.js (axios) lê o cookie XSRF-TOKEN automaticamente
+CSRF_COOKIE_NAME = "XSRF-TOKEN"
+CSRF_HEADER_NAME = "HTTP_X_XSRF_TOKEN"
 
 # Inertia
 INERTIA_LAYOUT = "base.html"
@@ -543,8 +558,17 @@ As três fazem a mesma coisa: na primeira visita, retornam HTML completo com os 
 
 Neste tutorial usamos a **função `render()`** por ser a mais familiar para quem vem do Django.
 
+> **Atenção: Inertia v2 envia JSON, não form-urlencoded**
+>
+> O `useForm.post()` do Inertia v2 envia os dados com `Content-Type: application/json`. O `request.POST` do Django só lê `application/x-www-form-urlencoded` ou `multipart/form-data` — com JSON, ele fica vazio.
+>
+> Por isso criamos o helper `_get_post_data()` que detecta o content type e faz o parse do `request.body` quando necessário.
+
 ```python
 # apps/core/views.py
+import json
+
+from django.http import QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from inertia import render
 
@@ -552,22 +576,34 @@ from .forms import MovieForm
 from .models import Movie
 
 
+def _get_post_data(request):
+    """O Inertia v2 envia JSON, mas o Django ModelForm espera QueryDict."""
+    if request.content_type == "application/json":
+        return QueryDict(mutable=True) | json.loads(request.body)
+    return request.POST
+
+
 def movie_list(request):
     movies = Movie.objects.all()
     data = [movie.serializable_values(exclude=["added_at"]) for movie in movies]
-    return render(request, "Movies/Index", props={
-        "movies": data,
-        "stats": {
-            "total":    movies.count(),
-            "want":     movies.filter(status="want").count(),
-            "watching": movies.filter(status="watching").count(),
-            "watched":  movies.filter(status="watched").count(),
-        }
-    })
+    return render(
+        request,
+        "Movies/Index",
+        props={
+            "movies": data,
+            "stats": {
+                "total": movies.count(),
+                "want": movies.filter(status="want").count(),
+                "watching": movies.filter(status="watching").count(),
+                "watched": movies.filter(status="watched").count(),
+            },
+        },
+    )
 
 
 def movie_create(request):
-    form = MovieForm(request.POST or None)
+    data = _get_post_data(request) if request.method == "POST" else None
+    form = MovieForm(data)
 
     if request.method == "POST" and form.is_valid():
         form.save()
@@ -578,17 +614,22 @@ def movie_create(request):
 
 def movie_update(request, pk):
     movie = get_object_or_404(Movie, pk=pk)
-    form = MovieForm(request.POST or None, instance=movie)
+    data = _get_post_data(request) if request.method == "POST" else None
+    form = MovieForm(data, instance=movie)
 
     if request.method == "POST" and form.is_valid():
         form.save()
         return redirect("movie_list")
 
     data = movie.serializable_values(exclude=["added_at"])
-    return render(request, "Movies/Edit", props={
-        "movie": data,
-        "errors": form.errors,
-    })
+    return render(
+        request,
+        "Movies/Edit",
+        props={
+            "movie": data,
+            "errors": form.errors,
+        },
+    )
 
 
 def movie_delete(request, pk):
@@ -821,6 +862,8 @@ Crie `frontend/src/Pages/Movies/Edit.vue`:
 <script setup>
 import { useForm } from "@inertiajs/vue3"
 
+// 'movie' vem do Django: movie.serializable_values() passado como prop pelo Inertia.
+// O useForm inicializa os campos do formulário com os valores atuais do filme.
 const props = defineProps(["movie"])
 
 const form = useForm({
@@ -928,7 +971,8 @@ Os erros do `ModelForm` são passados como prop `errors`. No GET inicial é um d
 
 ```python
 def movie_create(request):
-    form = MovieForm(request.POST or None)
+    data = _get_post_data(request) if request.method == "POST" else None
+    form = MovieForm(data)
 
     if request.method == "POST" and form.is_valid():
         form.save()

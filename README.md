@@ -12,6 +12,7 @@ CRUD de filmes usando Django no backend com Inertia.js e Vue 3 no frontend. Um m
 - [python-decouple 3.8](https://github.com/HBNetwork/python-decouple)
 - [PostgreSQL 18.3](https://www.postgresql.org/)
 - [Docker](https://www.docker.com/)
+- [Ruff](https://docs.astral.sh/ruff/) (dev)
 
 ## Requisitos
 
@@ -27,8 +28,10 @@ CRUD de filmes usando Django no backend com Inertia.js e Vue 3 no frontend. Um m
 git clone https://github.com/rg3915/django-inertia-vuejs.git
 cd django-inertia-vuejs
 
-# Copie o arquivo de variáveis de ambiente
+# Copie o arquivo de variáveis de ambiente e gere uma SECRET_KEY
 cp .env.example .env
+uv run python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+# Cole o valor gerado na variável SECRET_KEY do .env
 
 # Suba o banco de dados e o pgAdmin
 docker compose up -d

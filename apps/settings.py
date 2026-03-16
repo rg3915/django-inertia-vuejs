@@ -119,6 +119,10 @@ USE_I18N = True
 
 USE_TZ = True
 
+# CSRF — o Inertia.js (axios) lê o cookie XSRF-TOKEN automaticamente
+CSRF_COOKIE_NAME = 'XSRF-TOKEN'
+CSRF_HEADER_NAME = 'HTTP_X_XSRF_TOKEN'
+
 # Inertia
 INERTIA_LAYOUT = 'base.html'
 
