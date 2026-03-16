@@ -202,6 +202,11 @@ movies/
     ├── vite.config.js
     └── src/
         ├── main.js
+        ├── Components/
+        │   ├── ConfirmDialog.vue
+        │   ├── MovieFormDialog.vue
+        │   ├── MovieTable.vue
+        │   └── StatsBar.vue
         └── Pages/
             └── Movies/
                 └── Index.vue
@@ -718,20 +723,197 @@ createInertiaApp({
 })
 ```
 
-Crie `frontend/src/Pages/Movies/Index.vue`. Todo o CRUD acontece nesta única página, usando dialogs do PicoCSS para criar, editar e confirmar exclusão.
+Antes de criar a página principal, crie os componentes reutilizáveis.
+
+Crie `frontend/src/Components/StatsBar.vue` — barra de estatísticas:
+
+```vue
+<script setup>
+defineProps(["stats"])
+</script>
+
+<template>
+    <hgroup>
+        <h1>Filmes</h1>
+        <p>
+            Total: {{ stats.total }} |
+            Quero ver: {{ stats.want }} |
+            Assistindo: {{ stats.watching }} |
+            Assistidos: {{ stats.watched }}
+        </p>
+    </hgroup>
+</template>
+```
+
+Crie `frontend/src/Components/MovieTable.vue` — tabela de filmes que emite eventos para editar e excluir:
+
+```vue
+<script setup>
+defineProps(["movies"])
+defineEmits(["edit", "delete"])
+</script>
+
+<template>
+    <figure>
+        <table>
+            <thead>
+                <tr>
+                    <th>Titulo</th>
+                    <th>Diretor</th>
+                    <th>Ano</th>
+                    <th>Nota</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="movie in movies" :key="movie.id">
+                    <td>{{ movie.title }}</td>
+                    <td>{{ movie.director }}</td>
+                    <td>{{ movie.year }}</td>
+                    <td>{{ movie.rating }}</td>
+                    <td>{{ movie.status }}</td>
+                    <td>
+                        <a href="#" role="button" class="outline" @click.prevent="$emit('edit', movie)">Editar</a>
+                        &nbsp;
+                        <a href="#" role="button" class="outline secondary" @click.prevent="$emit('delete', movie)">Excluir</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </figure>
+</template>
+```
+
+Crie `frontend/src/Components/MovieFormDialog.vue` — dialog reutilizável para criar e editar filmes:
+
+```vue
+<script setup>
+// Recebe o form (useForm do Inertia), os errors do Django,
+// o título do dialog e controla visibilidade via v-model (open).
+const props = defineProps(["form", "errors", "title", "open"])
+const emit = defineEmits(["update:open", "submit"])
+
+function close() {
+    emit("update:open", false)
+}
+</script>
+
+<template>
+    <dialog :open="open">
+        <article>
+            <header>
+                <button aria-label="Close" rel="prev" @click="close"></button>
+                <h3>{{ title }}</h3>
+            </header>
+            <form @submit.prevent="$emit('submit')">
+                <label>
+                    Titulo
+                    <input v-model="form.title" :aria-invalid="!!errors?.title" />
+                    <small v-if="errors?.title" style="color: red">{{ errors.title[0] }}</small>
+                </label>
+
+                <label>
+                    Diretor
+                    <input v-model="form.director" :aria-invalid="!!errors?.director" />
+                    <small v-if="errors?.director" style="color: red">{{ errors.director[0] }}</small>
+                </label>
+
+                <div class="grid">
+                    <label>
+                        Ano
+                        <input v-model="form.year" type="number" min="0" :aria-invalid="!!errors?.year" />
+                        <small v-if="errors?.year" style="color: red">{{ errors.year[0] }}</small>
+                    </label>
+                    <label>
+                        Genero
+                        <input v-model="form.genre" :aria-invalid="!!errors?.genre" />
+                        <small v-if="errors?.genre" style="color: red">{{ errors.genre[0] }}</small>
+                    </label>
+                </div>
+
+                <div class="grid">
+                    <label>
+                        Nota (0-10)
+                        <input v-model="form.rating" type="number" min="0" max="10" :aria-invalid="!!errors?.rating" />
+                        <small v-if="errors?.rating" style="color: red">{{ errors.rating[0] }}</small>
+                    </label>
+                    <label>
+                        Status
+                        <select v-model="form.status" :aria-invalid="!!errors?.status">
+                            <option value="want">Quero Ver</option>
+                            <option value="watching">Assistindo</option>
+                            <option value="watched">Assistido</option>
+                        </select>
+                        <small v-if="errors?.status" style="color: red">{{ errors.status[0] }}</small>
+                    </label>
+                </div>
+
+                <label>
+                    Notas
+                    <textarea v-model="form.notes" :aria-invalid="!!errors?.notes"></textarea>
+                    <small v-if="errors?.notes" style="color: red">{{ errors.notes[0] }}</small>
+                </label>
+
+                <footer>
+                    <div class="grid">
+                        <button type="button" class="outline secondary" @click="close">Cancelar</button>
+                        <button type="submit" :disabled="form.processing" :aria-busy="form.processing">Salvar</button>
+                    </div>
+                </footer>
+            </form>
+        </article>
+    </dialog>
+</template>
+```
+
+Crie `frontend/src/Components/ConfirmDialog.vue` — dialog genérico de confirmação:
+
+```vue
+<script setup>
+// Controla visibilidade via v-model (open).
+defineProps(["open", "title", "message"])
+const emit = defineEmits(["update:open", "confirm"])
+
+function close() {
+    emit("update:open", false)
+}
+</script>
+
+<template>
+    <dialog :open="open">
+        <article>
+            <header>
+                <button aria-label="Close" rel="prev" @click="close"></button>
+                <h3>{{ title }}</h3>
+            </header>
+            <p v-html="message"></p>
+            <footer>
+                <div class="grid">
+                    <button class="outline secondary" @click="close">Cancelar</button>
+                    <button class="contrast" @click="$emit('confirm')">Confirmar</button>
+                </div>
+            </footer>
+        </article>
+    </dialog>
+</template>
+```
+
+Agora crie `frontend/src/Pages/Movies/Index.vue`. Todo o CRUD acontece nesta única página, usando os componentes acima.
 
 ```vue
 <script setup>
 import { ref, onMounted } from "vue"
 import { router, useForm } from "@inertiajs/vue3"
+import StatsBar from "../../Components/StatsBar.vue"
+import MovieTable from "../../Components/MovieTable.vue"
+import MovieFormDialog from "../../Components/MovieFormDialog.vue"
+import ConfirmDialog from "../../Components/ConfirmDialog.vue"
 
 // defineProps é uma macro do Vue 3 que declara quais dados o componente espera receber.
 // Quem passa esses dados é o Django — quando a view faz:
 //   render(request, "Movies/Index", props={"movies": data, "stats": {...}})
 // o Inertia serializa esse dict como JSON e injeta como props no componente Vue.
-// É como se o Django fizesse <Index :movies="data" :stats="stats" />,
-// mas quem faz essa passagem é o protocolo Inertia, não um componente pai Vue.
-// Sem o defineProps, o componente não teria acesso aos dados.
 //
 // Quando uma validação falha no backend, o Django re-renderiza Movies/Index
 // com props extras: errors, showDialog, editMovie e formData.
@@ -811,19 +993,8 @@ function submitEdit() {
 
 // --- Delete ---
 // router.post() faz um POST diretamente para uma rota do Django.
-// A URL `/${id}/delete/` é uma rota definida no urls.py — não existe Vue Router.
 // O Inertia intercepta a resposta (um redirect 302), busca os novos dados
 // via JSON e troca o componente sem recarregar a página.
-//
-// Sem o Inertia, você precisaria:
-// 1. Criar uma API REST no Django (Django Ninja + schema + endpoint)
-// 2. Chamar essa API com axios ou fetch no Vue
-// 3. Manter duas rotas: uma no urls.py e outra no Vue Router
-// 4. Configurar CORS entre os dois projetos
-//
-// Com o Inertia, nada disso existe. O router.post() substitui o axios/fetch,
-// a rota é uma só (do Django), e não há API — o Django responde direto
-// para o componente Vue via protocolo Inertia.
 function confirmDelete(movie) {
     movieToDelete.value = movie
     showDeleteDialog.value = true
@@ -871,94 +1042,66 @@ onMounted(() => {
 
 <template>
     <main class="container">
-        <hgroup>
-            <h1>Filmes</h1>
-            <p>
-                Total: {{ stats.total }} |
-                Quero ver: {{ stats.want }} |
-                Assistindo: {{ stats.watching }} |
-                Assistidos: {{ stats.watched }}
-            </p>
-        </hgroup>
+        <!-- :stats é uma prop — passa o objeto stats do Django para o componente filho.
+             No Vue, o prefixo ":" (abreviação de v-bind) indica que o valor é uma
+             expressão JavaScript, não uma string literal. Sem ":", seria a string "stats". -->
+        <StatsBar :stats="stats" />
 
+        <!-- @click é um evento nativo do DOM. Quando o botão é clicado,
+             executa a função openCreate() que reseta o form e abre o dialog. -->
         <button @click="openCreate">Novo filme</button>
 
-        <figure>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Titulo</th>
-                        <th>Diretor</th>
-                        <th>Ano</th>
-                        <th>Nota</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="movie in movies" :key="movie.id">
-                        <td>{{ movie.title }}</td>
-                        <td>{{ movie.director }}</td>
-                        <td>{{ movie.year }}</td>
-                        <td>{{ movie.rating }}</td>
-                        <td>{{ movie.status }}</td>
-                        <td>
-                            <a href="#" role="button" class="outline" @click.prevent="openEdit(movie)">Editar</a>
-                            &nbsp;
-                            <a href="#" role="button" class="outline secondary" @click.prevent="confirmDelete(movie)">Excluir</a>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </figure>
+        <!-- :movies é uma prop — passa a lista de filmes para o componente.
+             @edit e @delete são eventos customizados emitidos pelo componente filho
+             (via $emit). Quando o usuário clica "Editar" ou "Excluir" dentro da tabela,
+             o MovieTable emite o evento com o objeto movie como argumento,
+             e o Index.vue chama a função correspondente (openEdit ou confirmDelete). -->
+        <MovieTable :movies="movies" @edit="openEdit" @delete="confirmDelete" />
 
-        <!-- Dialog: Criar filme -->
-        <dialog :open="showCreateDialog">
-            <article>
-                <header>
-                    <button aria-label="Close" rel="prev" @click="showCreateDialog = false"></button>
-                    <h3>Novo Filme</h3>
-                </header>
-                <form @submit.prevent="submitCreate">
-                    <!-- campos do formulário com validação -->
-                </form>
-            </article>
-        </dialog>
+        <!-- v-model:open é um binding bidirecional — o componente pai (Index) controla
+             se o dialog está aberto, e o componente filho (MovieFormDialog) pode fechá-lo
+             emitindo update:open. É equivalente a :open + @update:open juntos.
+             :form passa o objeto useForm do Inertia (reativo — mudanças no filho
+             refletem no pai automaticamente porque é o mesmo objeto por referência).
+             :errors passa os erros do Django, mas só quando o dialog está aberto
+             (evita mostrar erros de um dialog no outro).
+             title sem ":" é uma string literal — não precisa de binding.
+             @submit é um evento customizado — quando o form é submetido dentro do
+             MovieFormDialog, ele emite "submit" e o Index.vue chama submitCreate(). -->
+        <MovieFormDialog
+            v-model:open="showCreateDialog"
+            :form="createForm"
+            :errors="showCreateDialog ? errors : {}"
+            title="Novo Filme"
+            @submit="submitCreate"
+        />
 
-        <!-- Dialog: Editar filme -->
-        <dialog :open="showEditDialog">
-            <article>
-                <header>
-                    <button aria-label="Close" rel="prev" @click="showEditDialog = false"></button>
-                    <h3>Editar Filme</h3>
-                </header>
-                <form @submit.prevent="submitEdit">
-                    <!-- campos do formulário com validação -->
-                </form>
-            </article>
-        </dialog>
+        <!-- Mesmo componente MovieFormDialog reutilizado para edição.
+             A única diferença são as props: editForm em vez de createForm,
+             showEditDialog em vez de showCreateDialog, e submitEdit em vez de submitCreate.
+             Isso é o poder dos componentes Vue — mesma UI, dados diferentes. -->
+        <MovieFormDialog
+            v-model:open="showEditDialog"
+            :form="editForm"
+            :errors="showEditDialog ? errors : {}"
+            title="Editar Filme"
+            @submit="submitEdit"
+        />
 
-        <!-- Dialog: Confirmar exclusão -->
-        <dialog :open="showDeleteDialog">
-            <article>
-                <header>
-                    <button aria-label="Close" rel="prev" @click="showDeleteDialog = false"></button>
-                    <h3>Confirmar exclusão</h3>
-                </header>
-                <p>Tem certeza que deseja excluir <strong>{{ movieToDelete?.title }}</strong>?</p>
-                <footer>
-                    <div class="grid">
-                        <button class="outline secondary" @click="showDeleteDialog = false">Cancelar</button>
-                        <button class="contrast" @click="executeDelete">Excluir</button>
-                    </div>
-                </footer>
-            </article>
-        </dialog>
+        <!-- ConfirmDialog é um componente genérico — não sabe nada sobre filmes.
+             Recebe title, message e emite "confirm" quando o usuário confirma.
+             :message usa ":" porque o valor é uma template literal JavaScript
+             (com ${} para interpolar o título do filme).
+             @confirm chama executeDelete() que faz o POST para o Django. -->
+        <ConfirmDialog
+            v-model:open="showDeleteDialog"
+            title="Confirmar exclusão"
+            :message="`Tem certeza que deseja excluir <strong>${movieToDelete?.title}</strong>?`"
+            @confirm="executeDelete"
+        />
     </main>
 </template>
 ```
-
-> Os dialogs de criação e edição contêm os mesmos campos do formulário (Titulo, Diretor, Ano, Genero, Nota, Status, Notas) com validação via `aria-invalid` e mensagens de erro do Django. O template completo está no código-fonte do projeto.
 
 ### Passo 8 — Rodar
 
