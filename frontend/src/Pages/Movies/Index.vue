@@ -32,39 +32,45 @@ function deleteMovie(id) {
 </script>
 
 <template>
-    <div>
-        <h1>Filmes ({{ stats.total }})</h1>
+    <main class="container">
+        <hgroup>
+            <h1>Filmes</h1>
+            <p>
+                Total: {{ stats.total }} |
+                Quero ver: {{ stats.want }} |
+                Assistindo: {{ stats.watching }} |
+                Assistidos: {{ stats.watched }}
+            </p>
+        </hgroup>
 
-        <p>
-            Quero ver: {{ stats.want }} |
-            Assistindo: {{ stats.watching }} |
-            Assistidos: {{ stats.watched }}
-        </p>
+        <a href="/create/" role="button">Novo filme</a>
 
-        <a href="/create/">Novo filme</a>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Titulo</th>
-                    <th>Diretor</th>
-                    <th>Ano</th>
-                    <th>Status</th>
-                    <th>Acoes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="movie in movies" :key="movie.id">
-                    <td>{{ movie.title }}</td>
-                    <td>{{ movie.director }}</td>
-                    <td>{{ movie.year }}</td>
-                    <td>{{ movie.status }}</td>
-                    <td>
-                        <a :href="`/${movie.id}/update/`">Editar</a>
-                        <button @click="deleteMovie(movie.id)">Excluir</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+        <figure>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Titulo</th>
+                        <th>Diretor</th>
+                        <th>Ano</th>
+                        <th>Nota</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="movie in movies" :key="movie.id">
+                        <td>{{ movie.title }}</td>
+                        <td>{{ movie.director }}</td>
+                        <td>{{ movie.year }}</td>
+                        <td>{{ movie.rating }}</td>
+                        <td>{{ movie.status }}</td>
+                        <td>
+                            <a :href="`/${movie.id}/update/`">Editar</a>
+                            <a href="#" role="button" class="outline secondary" @click.prevent="deleteMovie(movie.id)">Excluir</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </figure>
+    </main>
 </template>

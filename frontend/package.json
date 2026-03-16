@@ -14,6 +14,7 @@
   "type": "commonjs",
   "dependencies": {
     "@inertiajs/vue3": "^2.3.18",
+    "@picocss/pico": "^2.1.1",
     "@vitejs/plugin-vue": "^6.0.5",
     "vue": "^3.5.30"
   },
