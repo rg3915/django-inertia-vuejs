@@ -53,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'inertia.middleware.InertiaMiddleware',  # adicionar após SessionMiddleware
+    'apps.core.middleware.InertiaFlashMiddleware',
 ]
 
 ROOT_URLCONF = 'apps.urls'

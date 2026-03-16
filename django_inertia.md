@@ -196,17 +196,21 @@ movies/
 │       ├── models.py
 │       ├── forms.py
 │       ├── views.py
-│       └── urls.py
+│       ├── urls.py
+│       └── middleware.py
 └── frontend/
     ├── package.json
     ├── vite.config.js
     └── src/
         ├── main.js
+        ├── composables/
+        │   └── useModal.js
         ├── Components/
         │   ├── ConfirmDialog.vue
         │   ├── MovieFormDialog.vue
         │   ├── MovieTable.vue
-        │   └── StatsBar.vue
+        │   ├── StatsBar.vue
+        │   └── Toast.vue
         └── Pages/
             └── Movies/
                 └── Index.vue
@@ -400,6 +404,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     # ... middleware padrão ...
     "inertia.middleware.InertiaMiddleware",  # adicionar após SessionMiddleware
+    "apps.core.middleware.InertiaFlashMiddleware",
 ]
 
 DATABASES = {
@@ -569,10 +574,45 @@ Neste tutorial usamos a **função `render()`** por ser a mais familiar para que
 
 Todo o CRUD acontece em uma única página (`Movies/Index`). As views de criação e edição, em caso de erro de validação, re-renderizam `Movies/Index` com props extras (`errors`, `showDialog`, `formData`) para que o dialog reabra com os erros exibidos.
 
+Crie `apps/core/middleware.py` — middleware que compartilha flash messages do Django como prop do Inertia:
+
+```python
+# apps/core/middleware.py
+from django.contrib import messages
+from inertia import share
+
+
+class InertiaFlashMiddleware:
+    """Compartilha flash messages do Django como prop 'flash' do Inertia.
+
+    O django.contrib.messages armazena mensagens na sessão.
+    Este middleware lê as mensagens ANTES da view executar
+    (elas foram setadas na request anterior, ex: messages.success no POST)
+    e as compartilha via share() para que estejam disponíveis como prop.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Lê as mensagens da sessão ANTES da view executar.
+        # As mensagens foram criadas na request anterior (ex: POST que fez redirect).
+        flash = [
+            {"message": str(m), "tags": m.tags}
+            for m in messages.get_messages(request)
+        ]
+
+        if flash:
+            share(request, flash=flash)
+
+        return self.get_response(request)
+```
+
 ```python
 # apps/core/views.py
 import json
 
+from django.contrib import messages
 from django.http import QueryDict
 from django.shortcuts import get_object_or_404, redirect
 from inertia import render
@@ -613,6 +653,7 @@ def movie_create(request):
 
     if form.is_valid():
         form.save()
+        messages.success(request, "Filme criado com sucesso!")
         return redirect("movie_list")
 
     props = _index_props()
@@ -629,6 +670,7 @@ def movie_update(request, pk):
 
     if form.is_valid():
         form.save()
+        messages.success(request, "Filme atualizado com sucesso!")
         return redirect("movie_list")
 
     props = _index_props()
@@ -642,6 +684,7 @@ def movie_update(request, pk):
 def movie_delete(request, pk):
     movie = get_object_or_404(Movie, pk=pk)
     movie.delete()
+    messages.success(request, "Filme excluído com sucesso!")
     return redirect("movie_list")
 ```
 
@@ -789,21 +832,34 @@ Crie `frontend/src/Components/MovieFormDialog.vue` — dialog reutilizável para
 
 ```vue
 <script setup>
+import { ref, watch } from "vue"
+import { useModal } from "../composables/useModal"
+
 // Recebe o form (useForm do Inertia), os errors do Django,
 // o título do dialog e controla visibilidade via v-model (open).
 const props = defineProps(["form", "errors", "title", "open"])
 const emit = defineEmits(["update:open", "submit"])
 
-function close() {
+const dialogRef = ref(null)
+const { isOpen, open, close } = useModal(dialogRef)
+
+// Sincroniza v-model:open do pai com o estado interno do modal
+watch(() => props.open, (val) => {
+    if (val && !isOpen.value) open()
+    if (!val && isOpen.value) close()
+})
+
+function handleClose() {
+    close()
     emit("update:open", false)
 }
 </script>
 
 <template>
-    <dialog :open="open">
+    <dialog ref="dialogRef" @close="handleClose">
         <article>
             <header>
-                <button aria-label="Close" rel="prev" @click="close"></button>
+                <button aria-label="Close" rel="prev" @click="handleClose"></button>
                 <h3>{{ title }}</h3>
             </header>
             <form @submit.prevent="$emit('submit')">
@@ -857,7 +913,7 @@ function close() {
 
                 <footer>
                     <div class="grid">
-                        <button type="button" class="outline secondary" @click="close">Cancelar</button>
+                        <button type="button" class="outline secondary" @click="handleClose">Cancelar</button>
                         <button type="submit" :disabled="form.processing" :aria-busy="form.processing">Salvar</button>
                     </div>
                 </footer>
@@ -871,26 +927,38 @@ Crie `frontend/src/Components/ConfirmDialog.vue` — dialog genérico de confirm
 
 ```vue
 <script setup>
+import { ref, watch } from "vue"
+import { useModal } from "../composables/useModal"
+
 // Controla visibilidade via v-model (open).
-defineProps(["open", "title", "message"])
+const props = defineProps(["open", "title", "message"])
 const emit = defineEmits(["update:open", "confirm"])
 
-function close() {
+const dialogRef = ref(null)
+const { isOpen, open, close } = useModal(dialogRef)
+
+watch(() => props.open, (val) => {
+    if (val && !isOpen.value) open()
+    if (!val && isOpen.value) close()
+})
+
+function handleClose() {
+    close()
     emit("update:open", false)
 }
 </script>
 
 <template>
-    <dialog :open="open">
+    <dialog ref="dialogRef" @close="handleClose">
         <article>
             <header>
-                <button aria-label="Close" rel="prev" @click="close"></button>
+                <button aria-label="Close" rel="prev" @click="handleClose"></button>
                 <h3>{{ title }}</h3>
             </header>
             <p v-html="message"></p>
             <footer>
                 <div class="grid">
-                    <button class="outline secondary" @click="close">Cancelar</button>
+                    <button class="outline secondary" @click="handleClose">Cancelar</button>
                     <button class="contrast" @click="$emit('confirm')">Confirmar</button>
                 </div>
             </footer>
@@ -898,6 +966,92 @@ function close() {
     </dialog>
 </template>
 ```
+
+Crie `frontend/src/composables/useModal.js` — composable que controla a animação dos modais PicoCSS:
+
+```js
+import { ref, watch, nextTick } from "vue"
+
+/**
+ * Composable para controlar modais com animação do PicoCSS.
+ *
+ * O PicoCSS espera que o modal use o HTMLDialogElement (showModal/close)
+ * e que as classes modal-is-open, modal-is-opening e modal-is-closing
+ * sejam aplicadas no <html> para controlar animações e scroll.
+ */
+export function useModal(dialogRef) {
+    const isOpen = ref(false)
+    const ANIMATION_DURATION = 400
+
+    function open() {
+        isOpen.value = true
+        nextTick(() => {
+            if (dialogRef.value) {
+                dialogRef.value.showModal()
+                document.documentElement.classList.add("modal-is-open", "modal-is-opening")
+                setTimeout(() => {
+                    document.documentElement.classList.remove("modal-is-opening")
+                }, ANIMATION_DURATION)
+            }
+        })
+    }
+
+    function close() {
+        document.documentElement.classList.add("modal-is-closing")
+        setTimeout(() => {
+            document.documentElement.classList.remove("modal-is-open", "modal-is-closing")
+            if (dialogRef.value) {
+                dialogRef.value.close()
+            }
+            isOpen.value = false
+        }, ANIMATION_DURATION)
+    }
+
+    return { isOpen, open, close }
+}
+```
+
+Crie `frontend/src/Components/Toast.vue` — componente que exibe flash messages do Django:
+
+```vue
+<script setup>
+import { ref, watch } from "vue"
+
+// Recebe as flash messages do Django via Inertia shared props.
+// Cada mensagem é exibida por alguns segundos e removida automaticamente.
+const props = defineProps(["messages"])
+
+const visible = ref([])
+
+watch(() => props.messages, (msgs) => {
+    if (!msgs || !msgs.length) return
+
+    msgs.forEach((msg, i) => {
+        const item = { ...msg, id: Date.now() + i }
+        visible.value.push(item)
+
+        setTimeout(() => {
+            visible.value = visible.value.filter(v => v.id !== item.id)
+        }, 4000)
+    })
+}, { immediate: true })
+</script>
+
+<template>
+    <div class="toast-container">
+        <div
+            v-for="toast in visible"
+            :key="toast.id"
+            class="toast"
+            :class="toast.tags"
+        >
+            {{ toast.message }}
+        </div>
+    </div>
+</template>
+```
+
+> O CSS do Toast (posicionamento fixo no canto superior direito, cores por tipo de mensagem e animações de entrada/saída) está no componente via `<style scoped>`. Veja o código-fonte completo no projeto.
 
 Agora crie `frontend/src/Pages/Movies/Index.vue`. Todo o CRUD acontece nesta única página, usando os componentes acima.
 
@@ -1160,6 +1314,7 @@ def movie_create(request):
 
     if form.is_valid():
         form.save()
+        messages.success(request, "Filme criado com sucesso!")
         return redirect("movie_list")
 
     # form.errors é {"title": ["Este campo é obrigatório."]} no POST inválido

@@ -1,6 +1,7 @@
 import json
 
 from django.http import QueryDict
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from inertia import render
 
@@ -40,6 +41,7 @@ def movie_create(request):
 
     if form.is_valid():
         form.save()
+        messages.success(request, 'Filme criado com sucesso!')
         return redirect('movie_list')
 
     props = _index_props()
@@ -56,6 +58,7 @@ def movie_update(request, pk):
 
     if form.is_valid():
         form.save()
+        messages.success(request, 'Filme atualizado com sucesso!')
         return redirect('movie_list')
 
     props = _index_props()
@@ -69,4 +72,5 @@ def movie_update(request, pk):
 def movie_delete(request, pk):
     movie = get_object_or_404(Movie, pk=pk)
     movie.delete()
+    messages.success(request, 'Filme excluído com sucesso!')
     return redirect('movie_list')

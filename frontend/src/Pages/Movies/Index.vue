@@ -5,6 +5,7 @@ import StatsBar from "../../Components/StatsBar.vue"
 import MovieTable from "../../Components/MovieTable.vue"
 import MovieFormDialog from "../../Components/MovieFormDialog.vue"
 import ConfirmDialog from "../../Components/ConfirmDialog.vue"
+import Toast from "../../Components/Toast.vue"
 
 // defineProps é uma macro do Vue 3 que declara quais dados o componente espera receber.
 // Quem passa esses dados é o Django — quando a view faz:
@@ -17,6 +18,7 @@ import ConfirmDialog from "../../Components/ConfirmDialog.vue"
 const props = defineProps([
     "movies", "stats",
     "errors", "showDialog", "editMovie", "formData",
+    "flash",
 ])
 
 // --- Estado dos dialogs ---
@@ -140,6 +142,9 @@ onMounted(() => {
 </script>
 
 <template>
+    <!-- Toast: exibe flash messages do Django (via shared props do Inertia) -->
+    <Toast :messages="flash" />
+
     <main class="container">
         <!-- Em django_inertia.md tem comentários explicando cada atributo a seguir. -->
         <StatsBar :stats="stats" />
