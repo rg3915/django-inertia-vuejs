@@ -15,10 +15,12 @@ import Toast from "../../Components/Toast.vue"
 // Quando uma validação falha no backend, o Django re-renderiza Movies/Index
 // com props extras: errors, showDialog, editMovie e formData.
 // Isso permite reabrir o dialog com os dados preenchidos e os erros exibidos.
+// Nota: 'flash' não aparece aqui. A partir do Inertia v3 as mensagens do Django
+// viajam no topo do page object (page.flash.messages), não como prop — o
+// componente Toast as lê direto via usePage().
 const props = defineProps([
     "movies", "stats",
     "errors", "showDialog", "editMovie", "formData",
-    "flash",
 ])
 
 // --- Estado dos dialogs ---
@@ -142,8 +144,8 @@ onMounted(() => {
 </script>
 
 <template>
-    <!-- Toast: exibe flash messages do Django (via shared props do Inertia) -->
-    <Toast :messages="flash" />
+    <!-- Toast: exibe as flash messages do Django (page.flash.messages do Inertia v3) -->
+    <Toast />
 
     <main class="container">
         <!-- Em django_inertia.md tem comentários explicando cada atributo a seguir. -->

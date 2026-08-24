@@ -1,13 +1,17 @@
 <script setup>
 import { ref, watch } from "vue"
+import { usePage } from "@inertiajs/vue3"
 
-// Recebe as flash messages do Django via Inertia shared props.
-// Cada mensagem é exibida por alguns segundos e removida automaticamente.
-const props = defineProps(["messages"])
+// A partir do Inertia v3 as mensagens do django.contrib.messages são nativas:
+// o inertia-django as coloca em page.flash.messages, no topo do page object
+// (não é mais uma prop, e não precisa mais de middleware customizado).
+// Cada item vem no formato { level, message }, onde level é 'success',
+// 'error', 'warning' ou 'info' — exatamente as tags do Django.
+const page = usePage()
 
 const visible = ref([])
 
-watch(() => props.messages, (msgs) => {
+watch(() => page.flash?.messages, (msgs) => {
     if (!msgs || !msgs.length) return
 
     msgs.forEach((msg, i) => {
@@ -27,7 +31,7 @@ watch(() => props.messages, (msgs) => {
             v-for="toast in visible"
             :key="toast.id"
             class="toast"
-            :class="toast.tags"
+            :class="toast.level"
         >
             {{ toast.message }}
         </div>

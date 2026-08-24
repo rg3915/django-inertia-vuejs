@@ -53,7 +53,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'inertia.middleware.InertiaMiddleware',  # adicionar após SessionMiddleware
-    'apps.core.middleware.InertiaFlashMiddleware',
 ]
 
 ROOT_URLCONF = 'apps.urls'
@@ -120,9 +119,10 @@ USE_I18N = True
 
 USE_TZ = True
 
-# CSRF — o Inertia.js (axios) lê o cookie XSRF-TOKEN automaticamente
-CSRF_COOKIE_NAME = 'XSRF-TOKEN'
-CSRF_HEADER_NAME = 'HTTP_X_XSRF_TOKEN'
+# CSRF — o Inertia v3 trocou o axios por um cliente XHR próprio, que por padrão
+# usa os nomes do Laravel (XSRF-TOKEN / X-XSRF-TOKEN). Em vez de adaptar o Django,
+# configuramos o cliente com os nomes nativos do Django em frontend/src/main.js.
+# Por isso aqui ficam os padrões: csrftoken e X-CSRFToken.
 
 # Inertia
 INERTIA_LAYOUT = 'base.html'
