@@ -283,18 +283,3 @@ da `settings.py:55` faz.
 
 Repare também no cabeçalho `Vary: X-Inertia` da resposta: é ele que impede um
 cache de servir o JSON para quem pediu HTML.
-
----
-
-## Nota sobre o código
-
-`apps/core/views.py:12-16` tem um helper com uma docstring que envelheceu:
-
-```python
-def _get_post_data(request):
-    """O Inertia v2 envia JSON, mas o Django ModelForm espera QueryDict."""
-```
-
-O comportamento continua correto no v3 (o cliente segue enviando JSON), mas o
-texto diz "v2". Se for mostrar esse trecho na tela, vale corrigir antes — ou
-usar como gancho para comentar que o projeto foi migrado para o v3.

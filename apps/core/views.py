@@ -10,7 +10,7 @@ from .models import Movie
 
 
 def _get_post_data(request):
-    """O Inertia v2 envia JSON, mas o Django ModelForm espera QueryDict."""
+    """O Inertia envia JSON, mas o Django ModelForm espera QueryDict."""
     if request.content_type == 'application/json':
         return QueryDict(mutable=True) | json.loads(request.body)
     return request.POST
