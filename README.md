@@ -99,3 +99,7 @@ O projeto usa o protocolo Inertia v3, que mudou dois pontos em relação ao v2:
 ## Documentação
 
 Veja o arquivo [django_inertia.md](django_inertia.md) para o guia completo do projeto.
+
+Veja [detalhes.md](detalhes.md) para um guia de leitura do código: onde o Inertia
+entra na configuração, como a view conversa com o componente Vue e o que o projeto
+deixa de precisar por não ter uma API REST no meio.
