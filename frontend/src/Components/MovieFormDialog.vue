@@ -32,7 +32,7 @@ function handleClose() {
             </header>
             <form @submit.prevent="$emit('submit')">
                 <label>
-                    Titulo
+                    Título
                     <input v-model="form.title" :aria-invalid="!!errors?.title" />
                     <small v-if="errors?.title" style="color: red">{{ errors.title[0] }}</small>
                 </label>
@@ -50,7 +50,7 @@ function handleClose() {
                         <small v-if="errors?.year" style="color: red">{{ errors.year[0] }}</small>
                     </label>
                     <label>
-                        Genero
+                        Gênero
                         <input v-model="form.genre" :aria-invalid="!!errors?.genre" />
                         <small v-if="errors?.genre" style="color: red">{{ errors.genre[0] }}</small>
                     </label>
@@ -58,8 +58,8 @@ function handleClose() {
 
                 <div class="grid">
                     <label>
-                        Nota (0-10)
-                        <input v-model="form.rating" type="number" min="0" max="10" :aria-invalid="!!errors?.rating" />
+                        Nota (0-5)
+                        <input v-model="form.rating" type="number" min="0" max="5" :aria-invalid="!!errors?.rating" />
                         <small v-if="errors?.rating" style="color: red">{{ errors.rating[0] }}</small>
                     </label>
                     <label>

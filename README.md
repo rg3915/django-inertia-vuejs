@@ -4,13 +4,15 @@ CRUD de filmes usando Django no backend com Inertia.js e Vue 3 no frontend. Um m
 
 ## Stack
 
-- [Django 6.0.3](https://docs.djangoproject.com/en/6.0/)
-- [inertia-django 1.2.0](https://github.com/inertiajs/inertia-django)
-- [Vue 3](https://vuejs.org/)
-- [Vite](https://vite.dev/)
-- [django-vite 3.1.0](https://github.com/MrBin99/django-vite)
+- [Django 6.1](https://docs.djangoproject.com/en/6.1/)
+- [inertia-django 2.0](https://github.com/inertiajs/inertia-django) (protocolo Inertia v3)
+- [Vue 3.5](https://vuejs.org/)
+- [@inertiajs/vue3 3.7](https://inertiajs.com/) (client v3, sem axios)
+- [Vite 8](https://vite.dev/)
+- [django-vite 3.1](https://github.com/MrBin99/django-vite)
+- [psycopg 3.3](https://www.psycopg.org/psycopg3/)
 - [python-decouple 3.8](https://github.com/HBNetwork/python-decouple)
-- [PostgreSQL 18.3](https://www.postgresql.org/)
+- [PostgreSQL 18.6](https://www.postgresql.org/)
 - [Docker](https://www.docker.com/)
 - [Ruff](https://docs.astral.sh/ruff/) (dev)
 
@@ -42,6 +44,9 @@ uv sync
 # Rode as migrations
 uv run python manage.py migrate
 
+# Popule o banco com os filmes da demonstração
+uv run python manage.py seed_movies
+
 # Instale as dependências do frontend
 cd frontend
 npm install
@@ -65,11 +70,31 @@ npm run dev
 
 Acesse http://localhost:8000
 
-## Produção
+## Dados de exemplo
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+# Popula o banco (idempotente — não duplica)
+uv run python manage.py seed_movies
+
+# Apaga tudo antes de popular
+uv run python manage.py seed_movies --clear
 ```
+
+Os três primeiros filmes são do Quentin Tarantino de propósito: na demonstração,
+digitar `tarantino` na busca filtra a lista em tempo real, do lado do cliente,
+sem nenhuma requisição ao servidor.
+
+## Notas sobre o Inertia v3
+
+O projeto usa o protocolo Inertia v3, que mudou dois pontos em relação ao v2:
+
+- **CSRF** — o client v3 trocou o axios por um XHR próprio, que por padrão usa os
+  nomes do Laravel (`XSRF-TOKEN` / `X-XSRF-TOKEN`). Em vez de adaptar o Django, o
+  client é configurado com os nomes nativos em `frontend/src/main.js`, e o
+  `settings.py` fica com os padrões (`csrftoken` / `X-CSRFToken`).
+- **Flash messages** — as mensagens do `django.contrib.messages` agora são nativas
+  e chegam em `page.flash.messages` (não como prop). O middleware customizado que
+  fazia isso à mão foi removido.
 
 ## Documentação
 
