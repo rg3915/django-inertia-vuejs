@@ -1,23 +1,33 @@
 services:
   db:
-    image: postgres:18.3-alpine
+    image: postgres:18.6-alpine
     restart: unless-stopped
     env_file: .env
     ports:
       - "5431:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Postgres 18+ espera um único mount em /var/lib/postgresql — os dados vão
+      # para um subdiretório por versão (ex: /var/lib/postgresql/18/docker).
+      # Montar direto em /var/lib/postgresql/data, como se fazia até o 17,
+      # faz o container entrar em loop de restart.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - movies-network
 
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:9.17
     restart: unless-stopped
     env_file: .env
     ports:
       - "5050:80"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - movies-network
 
