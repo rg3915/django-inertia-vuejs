@@ -6,6 +6,7 @@ import MovieTable from "../../Components/MovieTable.vue"
 import MovieFormDialog from "../../Components/MovieFormDialog.vue"
 import ConfirmDialog from "../../Components/ConfirmDialog.vue"
 import Toast from "../../Components/Toast.vue"
+import ThemeSwitch from "../../Components/ThemeSwitch.vue"
 
 // defineProps é uma macro do Vue 3 que declara quais dados o componente espera receber.
 // Quem passa esses dados é o Django — quando a view faz:
@@ -149,11 +150,16 @@ onMounted(() => {
 
     <main class="container">
         <!-- Em django_inertia.md tem comentários explicando cada atributo a seguir. -->
-        <StatsBar :stats="stats" />
+        <div class="page-header">
+            <StatsBar :stats="stats" />
+            <ThemeSwitch />
+        </div>
 
-        <button @click="openCreate">Novo filme</button>
-
-        <MovieTable :movies="movies" @edit="openEdit" @delete="confirmDelete" />
+        <MovieTable :movies="movies" @edit="openEdit" @delete="confirmDelete">
+            <template #actions>
+                <button @click="openCreate">Novo filme</button>
+            </template>
+        </MovieTable>
 
         <MovieFormDialog
             v-model:open="showCreateDialog"
@@ -179,3 +185,17 @@ onMounted(() => {
         />
     </main>
 </template>
+
+<style scoped>
+/* O Pico encosta o conteúdo no topo da janela; um respiro antes do título. */
+main.container {
+    padding-top: 2rem;
+}
+
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+</style>

@@ -31,13 +31,18 @@ const filteredMovies = computed(() => {
     <!-- role="search" em vez da tag <search>: o compilador do Vue não reconhece
          <search> como elemento HTML nativo e tenta resolvê-la como componente.
          O PicoCSS estiliza [role=search] do mesmo jeito. -->
-    <div role="search">
-        <input
-            v-model="search"
-            type="search"
-            placeholder="Buscar por título, diretor ou gênero…"
-            aria-label="Buscar filmes"
-        >
+    <div class="toolbar">
+        <!-- Ações da página (ex.: "Novo filme") entram aqui, ao lado da busca. -->
+        <slot name="actions" />
+
+        <div role="search">
+            <input
+                v-model="search"
+                type="search"
+                placeholder="Buscar por título, diretor ou gênero…"
+                aria-label="Buscar filmes"
+            >
+        </div>
     </div>
 
     <!-- O contador também é reativo: acompanha a digitação em tempo real. -->
@@ -83,6 +88,25 @@ const filteredMovies = computed(() => {
 </template>
 
 <style scoped>
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* A busca ocupa o espaço que sobra; o botão fica do tamanho do texto. */
+.toolbar [role="search"] {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+/* O conteúdo do slot vem do componente pai, daí o :slotted(). */
+.toolbar :slotted(button) {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
 .search-count {
     display: block;
     margin-top: -0.75rem;
