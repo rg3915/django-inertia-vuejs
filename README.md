@@ -103,3 +103,11 @@ Veja o arquivo [django_inertia.md](django_inertia.md) para o guia completo do pr
 Veja [detalhes.md](detalhes.md) para um guia de leitura do código: onde o Inertia
 entra na configuração, como a view conversa com o componente Vue e o que o projeto
 deixa de precisar por não ter uma API REST no meio.
+
+## Palestra
+
+Os slides da palestra **Inertia.js — O Monolito Moderno: construindo SPAs com Django
+e Vue sem precisar de uma API REST**, que usa este projeto como demonstração:
+
+- [palestra-inertia-v4.pdf](palestra-inertia-v4.pdf) — versão para leitura offline
+- [slides.com/regissantos/inertiajs](https://slides.com/regissantos/inertiajs) — versão online
